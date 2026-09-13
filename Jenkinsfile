@@ -5,6 +5,7 @@ pipeline {
         DOCKER_IMAGE = "nodejs-app"
         CONTAINER_NAME = "nodejs-container"
         PORT = "3000"
+        REPO_URL = "https://github.com/AishaMohamed2022/task3_multibranch.git"
     }
 
     stages {
@@ -16,17 +17,10 @@ pipeline {
             }
         }
 
-        stage('Install Dependencies') {
+      stages {
+        stage('Getting Repo files') {
             steps {
-                echo 'Installing Node.js dependencies...'
-                sh 'npm install'
-            }
-        }
-
-        stage('Test') {
-            steps {
-                echo 'Running tests...'
-                sh 'npm test'
+                git branch: "${GIT_BRANCH}", credentialsId: 'jenkins', url: "${REPO_URL}"
             }
         }
 
