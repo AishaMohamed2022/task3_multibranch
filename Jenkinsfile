@@ -10,53 +10,39 @@ pipeline {
 
     stages {
 
-        stage('Checkout') {
-            steps {
-                echo 'Cloning project from GitHub...'
-                checkout scm
-            }
-        }
-
-      stages {
         stage('Getting Repo files') {
             steps {
                 git branch: "${GIT_BRANCH}", credentialsId: 'jenkins', url: "${REPO_URL}"
             }
         }
-
         stage('Build Docker Image') {
             steps {
                 echo 'Building Docker image...'
-                sh 'docker build -t ${DOCKER_IMAGE}:build-${BUILD_NUMBER} .'
+
+                sh '''
+                    docker build -t ${DOCKER_IMAGE}:build-${BUILD_NUMBER} .
+                '''
             }
         }
 
-        stage('Run Container') {
+        stage('Push Docker Image') {
             steps {
-                echo 'Stopping old container if it exists...'
-                sh '''
-                    docker rm -f ${CONTAINER_NAME} || true
-                '''
+                script {
+                    withCredentials([usernamePassword(credentialsId: 'docker', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
 
-                echo 'Starting new container...'
-                sh '''
-                    docker run -d \
-                    --name ${CONTAINER_NAME} \
-                    -p ${PORT}:3000 \
-                    ${DOCKER_IMAGE}:build-${BUILD_NUMBER}
-                '''
-            }
-        }
+                        sh """
+                            echo ${DOCKER_PASSWORD} | docker login -u ${DOCKER_USERNAME} --password-stdin
 
-        stage('Health Check') {
-            steps {
-                echo 'Checking application health...'
-                sh '''
-                    sleep 5
-                    curl -f http://localhost:${PORT}/health
-                '''
+                            docker tag ${APP_NAME}:${BUILD_NUMBER} ${DOCKER_USERNAME}/${APP_NAME}:${BUILD_NUMBER}
+
+                            docker push ${DOCKER_USERNAME}/${APP_NAME}:${BUILD_NUMBER}
+                        """
+
+                    }
+                }
             }
-        }
+
+    
     }
 
     post {
@@ -70,6 +56,7 @@ pipeline {
 
         always {
             echo 'Cleaning unused Docker images...'
+
             sh '''
                 docker image prune -f || true
             '''
