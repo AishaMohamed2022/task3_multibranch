@@ -10,39 +10,58 @@ pipeline {
 
     stages {
 
-        stage('Getting Repo files') {
+        stage('Checkout') {
             steps {
-                git branch: "${GIT_BRANCH}", credentialsId: 'jenkins', url: "${REPO_URL}"
+                echo 'Cloning project from GitHub...'
+                checkout scm
             }
         }
+
+        stage('Getting Repo files') {
+            steps {
+                git branch: "${GIT_BRANCH}",
+                    credentialsId: 'jenkins',
+                    url: "${REPO_URL}"
+            }
+        }
+
         stage('Build Docker Image') {
             steps {
                 echo 'Building Docker image...'
 
+                sh 'docker build -t ${DOCKER_IMAGE}:build-${BUILD_NUMBER} .'
+            }
+        }
+
+        stage('Run Container') {
+            steps {
+                echo 'Stopping old container if it exists...'
+
                 sh '''
-                    docker build -t ${DOCKER_IMAGE}:build-${BUILD_NUMBER} .
+                    docker rm -f ${CONTAINER_NAME} || true
+                '''
+
+                echo 'Starting new container...'
+
+                sh '''
+                    docker run -d \
+                        --name ${CONTAINER_NAME} \
+                        -p ${PORT}:3000 \
+                        ${DOCKER_IMAGE}:build-${BUILD_NUMBER}
                 '''
             }
         }
 
-        stage('Push Docker Image') {
+        stage('Health Check') {
             steps {
-                script {
-                    withCredentials([usernamePassword(credentialsId: 'docker', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                echo 'Checking application health...'
 
-                        sh """
-                            echo ${DOCKER_PASSWORD} | docker login -u ${DOCKER_USERNAME} --password-stdin
-
-                            docker tag ${APP_NAME}:${BUILD_NUMBER} ${DOCKER_USERNAME}/${APP_NAME}:${BUILD_NUMBER}
-
-                            docker push ${DOCKER_USERNAME}/${APP_NAME}:${BUILD_NUMBER}
-                        """
-
-                    }
-                }
+                sh '''
+                    sleep 5
+                    curl -f http://localhost:${PORT}/health
+                '''
             }
-
-    
+        }
     }
 
     post {
@@ -63,4 +82,3 @@ pipeline {
         }
     }
 }
-
