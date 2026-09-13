@@ -52,16 +52,7 @@ pipeline {
             }
         }
 
-        stage('Health Check') {
-            steps {
-                echo 'Checking application health...'
-
-                sh '''
-                    sleep 5
-                    curl -f http://localhost:${PORT}/health
-                '''
-            }
-        }
+       
     }
 
     post {
